@@ -39,6 +39,7 @@ import { UNINITIALIZED } from '../../../constants.js';
 import { set_signal_status } from './status.js';
 import { invariant } from '../../shared/dev.js';
 import { OBSOLETE } from './deriveds.js';
+import { emit, hooks } from '../dev/devtools.js';
 
 /** @type {Batch | null} */
 let first_batch = null;
@@ -92,6 +93,31 @@ var flush_count = 0;
 export const source_stacks = new Set();
 
 let uid = 1;
+
+/**
+ * Dev only: batches that were merged into an earlier batch
+ * @type {WeakSet<Batch>}
+ */
+const merged_batches = new WeakSet();
+
+/**
+ * Dev only: batches whose end was already reported to devtools
+ * @type {WeakSet<Batch>}
+ */
+const ended_batches = new WeakSet();
+
+/**
+ * Dev only: report the end of a batch to devtools, once
+ * @param {Batch} batch
+ * @param {'batchCommitted' | 'batchDiscarded'} event
+ */
+function batch_ended(batch, event) {
+	if (hooks.batchCommitted === null && hooks.batchDiscarded === null) return;
+	if (ended_batches.has(batch)) return;
+
+	ended_batches.add(batch);
+	if (hooks[event] !== null) emit(event, batch);
+}
 
 export class Batch {
 	id = uid++;
@@ -448,6 +474,10 @@ export class Batch {
 				// Rebases can activate other batches or null it out, therefore restore the new one here
 				current_batch = next_batch;
 			}
+
+			if (DEV) {
+				batch_ended(this, 'batchCommitted');
+			}
 		}
 
 		if (next_batch !== null) {
@@ -589,6 +619,8 @@ export class Batch {
 			mark(source);
 		}
 
+		if (DEV) merged_batches.add(batch);
+
 		this.oncommit(() => batch.discard());
 		batch.#unlink();
 
@@ -638,12 +670,20 @@ export class Batch {
 	}
 
 	flush() {
+		if (DEV && hooks.flushStart !== null) {
+			emit('flushStart', this);
+		}
+
 		try {
 			is_processing = true;
 			current_batch = this;
 
 			this.#process();
 		} finally {
+			if (DEV && hooks.flushEnd !== null) {
+				emit('flushEnd', this);
+			}
+
 			flush_count = 0;
 			last_scheduled_effect = null;
 			collected_effects = null;
@@ -666,6 +706,12 @@ export class Batch {
 	}
 
 	discard() {
+		if (DEV) {
+			// a batch that was merged into an earlier one is discarded once that one commits,
+			// but its changes were committed along with it
+			batch_ended(this, merged_batches.has(this) ? 'batchCommitted' : 'batchDiscarded');
+		}
+
 		for (const fn of this.#discard_callbacks) fn(this);
 		this.#discard_callbacks.clear();
 

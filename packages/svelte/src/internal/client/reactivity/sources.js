@@ -43,6 +43,8 @@ import {
 import { proxy } from '../proxy.js';
 import { execute_derived } from './deriveds.js';
 import { set_signal_status, update_derived_status } from './status.js';
+import { devtools_depth, devtools_state_write, emit, hooks } from '../dev/devtools.js';
+import { UNINITIALIZED } from '../../../constants.js';
 
 /** @type {Set<Effect>} */
 export let eager_effects = new Set();
@@ -188,6 +190,10 @@ var count_deps = 0;
  * @returns {V}
  */
 export function internal_set(source, value, updated_during_traversal = null) {
+	if (DEV && devtools_depth > 0) {
+		devtools_state_write();
+	}
+
 	if (!source.equals(value)) {
 		if (is_destroying_effect) {
 			old_values.set(source, value);
@@ -197,10 +203,21 @@ export function internal_set(source, value, updated_during_traversal = null) {
 			old_values.set(source, source.v);
 		}
 
+		// captured before `capture` updates `source.v`, for devtools
+		var previous_value = DEV ? source.v : undefined;
+
 		var batch = Batch.ensure();
 		batch.capture(source, value);
 
 		if (DEV) {
+			if (hooks.signalWritten !== null) {
+				emit('signalWritten', source, {
+					old: previous_value === UNINITIALIZED ? undefined : previous_value,
+					value: value === UNINITIALIZED ? undefined : value,
+					batch
+				});
+			}
+
 			if (tracing_mode_flag || active_effect !== null) {
 				source.updated ??= new Map();
 				source_stacks.add(source);

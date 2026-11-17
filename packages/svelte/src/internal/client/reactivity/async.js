@@ -25,6 +25,7 @@ import {
 	set_reactivity_loss_tracker
 } from './deriveds.js';
 import { aborted } from './effects.js';
+import { label_source } from '../dev/tracing.js';
 
 /**
  * @param {Blocker[]} blockers
@@ -44,11 +45,14 @@ export function flatten(blockers, sync, async, fn) {
 		deriveds.forEach((d, i) => {
 			// TODO this is kinda useful for debugging but a lousy implementation —
 			// maybe the compiler could pass through the template string
-			d.label = sync[i]
-				.toString()
-				.replace('() => ', '')
-				.replaceAll('$.eager(() => ', '$state.eager(')
-				.replace(/\$\.get\((.+?)\)/g, (_, id) => id);
+			label_source(
+				d,
+				sync[i]
+					.toString()
+					.replace('() => ', '')
+					.replaceAll('$.eager(() => ', '$state.eager(')
+					.replace(/\$\.get\((.+?)\)/g, (_, id) => id)
+			);
 		});
 	}
 

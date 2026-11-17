@@ -16,6 +16,7 @@ import { Batch, current_batch, flushSync, is_flushing_sync } from '../../reactiv
 import { BranchManager } from './branches.js';
 import { capture, unset_context } from '../../reactivity/async.js';
 import { DEV } from 'esm-env';
+import { label_source } from '../../dev/tracing.js';
 
 const PENDING = 0;
 const THEN = 1;
@@ -44,8 +45,8 @@ export function await_block(node, get_input, pending_fn, then_fn, catch_fn) {
 	var error = runes ? source(v) : mutable_source(v, false, false);
 
 	if (DEV) {
-		value.label = '{#await ...} value';
-		error.label = '{#await ...} error';
+		label_source(value, '{#await ...} value');
+		label_source(error, '{#await ...} error');
 	}
 
 	var branches = new BranchManager(node);

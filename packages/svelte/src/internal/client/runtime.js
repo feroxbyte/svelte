@@ -59,6 +59,7 @@ import { captured_signals } from './legacy.js';
 import { without_reactive_context } from './dom/elements/bindings/shared.js';
 import { set_signal_status, update_derived_status } from './reactivity/status.js';
 import * as w from './warnings.js';
+import { emit, hooks } from './dev/devtools.js';
 
 export let is_destroying_effect = false;
 
@@ -466,6 +467,10 @@ export function update_effect(effect) {
 		var previous_stack = /** @type {any} */ (dev_stack);
 		// only block effects have a dev stack, keep the current one otherwise
 		set_dev_stack(effect.dev_stack ?? dev_stack);
+
+		if (hooks.reactionRunStart !== null) {
+			emit('reactionRunStart', effect);
+		}
 	}
 
 	try {
@@ -496,6 +501,10 @@ export function update_effect(effect) {
 		if (DEV) {
 			set_dev_current_component_function(previous_component_fn);
 			set_dev_stack(previous_stack);
+
+			if (hooks.reactionRunEnd !== null) {
+				emit('reactionRunEnd', effect);
+			}
 		}
 	}
 }

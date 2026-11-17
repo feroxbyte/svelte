@@ -48,6 +48,8 @@ import { increment_pending, unset_context } from './async.js';
 import { deferred, includes, noop } from '../../shared/utils.js';
 import { set_signal_status, update_derived_status } from './status.js';
 import { stringify_derived } from '../dev/debug.js';
+import { emit, hooks } from '../dev/devtools.js';
+import { label_source } from '../dev/tracing.js';
 
 /**
  * This allows us to track 'reactivity loss' that occurs when signals
@@ -108,10 +110,11 @@ export const OBSOLETE = Symbol('obsolete');
  * @param {() => V | Promise<V>} fn
  * @param {string} [label]
  * @param {string} [location] If provided, print a warning if the value is not read immediately after update
+ * @param {string} [dev_location] Dev only: `file:line:column` of the declaration, for devtools
  * @returns {Promise<Source<V>>}
  */
 /*#__NO_SIDE_EFFECTS__*/
-export function async_derived(fn, label, location) {
+export function async_derived(fn, label, location, dev_location) {
 	let parent = /** @type {Effect | null} */ (active_effect);
 
 	if (parent === null) {
@@ -261,6 +264,7 @@ export function async_derived(fn, label, location) {
 		// add a flag that lets this be printed as a derived
 		// when using `$inspect.trace()`
 		signal.f |= ASYNC;
+		label_source(signal, /** @type {string} */ (signal.label), dev_location);
 	}
 
 	return new Promise((fulfil) => {
@@ -358,6 +362,10 @@ export function execute_derived(derived) {
 	if (DEV) {
 		let prev_eager_effects = eager_effects;
 		set_eager_effects(new Set());
+		if (hooks.reactionRunStart !== null) {
+			emit('reactionRunStart', derived);
+		}
+
 		try {
 			if (includes.call(stack, derived)) {
 				e.derived_references_self();
@@ -371,6 +379,10 @@ export function execute_derived(derived) {
 			set_active_effect(prev_active_effect);
 			set_eager_effects(prev_eager_effects);
 			stack.pop();
+
+			if (hooks.reactionRunEnd !== null) {
+				emit('reactionRunEnd', derived);
+			}
 		}
 	} else {
 		try {
