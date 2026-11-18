@@ -1,5 +1,11 @@
 # svelte
 
+## 5.58.1
+
+### Patch Changes
+
+- fix: print raw input text unchanged, respect whitespace rules ([#19292](https://github.com/sveltejs/svelte/pull/19292))
+
 ## 5.58.0
 
 ### Minor Changes
