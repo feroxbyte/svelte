@@ -1,9 +1,10 @@
-/** @import { Derived, Reaction, Value } from '#client' */
+/** @import { ComponentContext, Derived, Reaction, Value } from '#client' */
 import { UNINITIALIZED } from '../../../constants.js';
 import { snapshot } from '../../shared/clone.js';
 import { DERIVED, ASYNC, PROXY_PATH_SYMBOL, STATE_SYMBOL } from '#client/constants';
 import { effect_tracking } from '../reactivity/effects.js';
 import { active_reaction, untrack } from '../runtime.js';
+import { component_context } from '../context.js';
 import { announce_signal, hooks } from './devtools.js';
 
 /**
@@ -153,9 +154,10 @@ export function tag(source, label, location) {
  * @param {string} [location]
  * @param {object} [proxy] the `$state` proxy owning this source, if any
  * @param {PropertyKey} [key] the property of `proxy` this source stores (`undefined` for the version source)
+ * @param {ComponentContext | null} [ctx] the component the source was declared in
  * @returns {T}
  */
-export function label_source(source, label, location, proxy, key) {
+export function label_source(source, label, location, proxy, key, ctx) {
 	source.label = label;
 
 	if (location !== undefined) {
@@ -163,7 +165,7 @@ export function label_source(source, label, location, proxy, key) {
 	}
 
 	if (hooks.signalCreated !== null) {
-		announce_signal(source, label, source.location, proxy, key);
+		announce_signal(source, label, source.location, proxy, key, ctx);
 	}
 
 	return source;
@@ -173,10 +175,11 @@ export function label_source(source, label, location, proxy, key) {
  * @param {unknown} value
  * @param {string} label
  * @param {string} [location]
+ * @param {ComponentContext | null} [ctx] the component the proxy was declared in
  */
-export function tag_proxy(value, label, location) {
+export function tag_proxy(value, label, location, ctx = component_context) {
 	// @ts-expect-error
-	value?.[PROXY_PATH_SYMBOL]?.(label, location);
+	value?.[PROXY_PATH_SYMBOL]?.(label, location, ctx);
 	return value;
 }
 
